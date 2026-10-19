@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vòng Quay Hên Xui</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Canvas Confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <!-- Google Fonts: Be Vietnam Pro -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <!-- Firebase SDK (Modular App & Realtime Database) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+
+  <style>
+    body {
+      font-family: 'Be Vietnam Pro', sans-serif;
+      background: radial-gradient(circle at 50% 20%, #1e1b4b 0%, #0f172a 100%);
+      min-height: 100vh;
+      color: #f8fafc;
+    }
+
+    .glass-panel {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .wheel-pointer {
+      position: absolute;
+      top: -14px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 18px solid transparent;
+      border-right: 18px solid transparent;
+      border-top: 36px solid #ef4444;
+      filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));
+      z-index: 30;
+      transition: transform 0.1s ease;
+    }
+
+    .wheel-pointer::after {
+      content: '';
+      position: absolute;
+      top: -36px;
+      left: -8px;
+      width: 16px;
+      height: 16px;
+      background: #fbbf24;
+      border-radius: 50%;
+      box-shadow: 0 0 10px #f59e0b;
+    }
+
+    .btn-spin-glow {
+      box-shadow: 0 0 25px rgba(239, 68, 68, 0.6);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .btn-spin-glow:hover:not(:disabled) {
+      box-shadow: 0 0 35px rgba(239, 68, 68, 0.9);
+      transform: scale(1.05);
+    }
+    .btn-spin-glow:active:not(:disabled) {
+      transform: scale(0.96);
+    }
+
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 4px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: rgba(100, 116, 139, 0.5);
+      border-radius: 4px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb:hover {
+      background: rgba(148, 163, 184, 0.8);
+    }
+  </style>
+</head>
+<body class="flex flex-col min-h-screen text-slate-100 antialiased select-none">
+
+  <!-- Header -->
+  <header class="w-full px-4 sm:px-8 py-4 flex items-center justify-between border-b border-slate-800 bg-slate-900/60 sticky top-0 z-40 backdrop-blur-md">
+    <div class="flex items-center space-x-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-rose-500 flex items-center justify-center shadow-lg shadow-rose-500/20">
+        <i class="fa-solid fa-dharmachakra text-white text-xl animate-spin-slow"></i>
+      </div>
+      <div>
+        <h1 class="text-lg sm:text-xl font-bold tracking-tight bg-gradient-to-r from-amber-200 via-rose-300 to-indigo-200 bg-clip-text text-transparent">
+          Vòng Quay Hên Xui
+        </h1>
+      </div>
+    </div>
+
+    <!-- Right Controls -->
+    <div class="flex items-center space-x-2">
+      <!-- Toggle Sound -->
+      <button id="toggleSoundBtn" class="p-2.5 rounded-xl glass-panel hover:bg-slate-700/60 text-slate-300 hover:text-white transition" title="Âm thanh">
+        <i id="soundIcon" class="fa-solid fa-volume-high"></i>
+      </button>
+
+      <!-- Role Badge & Admin Action Button -->
+      <div id="roleContainer" class="flex items-center gap-2">
+        <!-- Guest Login Button: Chỉ biểu tượng ổ khóa kín đáo -->
+        <button id="adminLoginBtn" class="p-2.5 rounded-xl glass-panel hover:bg-slate-700/60 transition text-slate-400 hover:text-slate-200 border border-slate-700/50" title="Cài đặt">
+          <i class="fa-solid fa-lock text-sm"></i>
+        </button>
+
+        <!-- Admin Controls Group (Chỉ hiển thị khi Role = ADMIN) -->
+        <div id="adminControlsGroup" class="hidden flex items-center gap-2">
+          <span class="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 text-xs font-bold border border-emerald-500/30 flex items-center gap-1">
+            <i class="fa-solid fa-shield-halved"></i> ADMIN
+          </span>
+
+          <button id="toggleAdminBtn" class="px-3 py-2 rounded-xl text-xs sm:text-sm font-medium glass-panel hover:bg-slate-700/60 flex items-center space-x-1.5 transition text-amber-300 border-amber-500/30">
+            <i class="fa-solid fa-sliders"></i>
+            <span id="adminToggleText">Ẩn bảng</span>
+          </button>
+
+          <button id="logoutAdminBtn" class="p-2 rounded-xl glass-panel hover:bg-rose-900/50 text-rose-400 hover:text-rose-200 transition" title="Đăng xuất">
+            <i class="fa-solid fa-right-from-bracket"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Layout -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col lg:flex-row gap-8 items-start justify-center">
+
+    <!-- Left / Center: Wheel Container -->
+    <section class="flex-1 w-full flex flex-col items-center justify-center">
+      <!-- Wheel Frame -->
+      <div class="relative w-[340px] h-[340px] xs:w-[380px] xs:h-[380px] sm:w-[460px] sm:h-[460px] flex items-center justify-center p-3 sm:p-4 rounded-full bg-slate-800/80 shadow-2xl border-4 border-amber-400/40">
+        
+        <!-- Outer Glowing Ring -->
+        <div class="absolute inset-0 rounded-full border-2 border-dashed border-amber-300/30 animate-pulse pointer-events-none"></div>
+
+        <!-- Wheel Pointer Pin -->
+        <div id="pointerPin" class="wheel-pointer"></div>
+
+        <!-- The Canvas Wheel -->
+        <canvas id="wheelCanvas" width="800" height="800" class="w-full h-full rounded-full cursor-pointer shadow-inner"></canvas>
+
+        <!-- Center Knob & Spin Button -->
+        <button id="centerSpinBtn" class="absolute z-20 w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-tr from-red-600 via-rose-500 to-amber-500 text-white font-extrabold text-sm sm:text-base uppercase tracking-wider flex flex-col items-center justify-center border-4 border-white shadow-2xl btn-spin-glow active:scale-95 transition">
+          <span>QUAY</span>
+          <i class="fa-solid fa-play text-[10px] mt-0.5 opacity-80"></i>
+        </button>
+      </div>
+
+      <!-- Quick Action Controls Below Wheel -->
+      <div class="mt-8 flex flex-wrap gap-4 items-center justify-center">
+        <button id="spinBtn" class="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-rose-500 to-amber-500 text-white font-bold text-lg shadow-xl shadow-rose-500/25 btn-spin-glow flex items-center space-x-2">
+          <i class="fa-solid fa-dice"></i>
+          <span>QUAY NGAY</span>
+        </button>
+
+        <!-- Test Xác suất: Chỉ hiện với role ADMIN -->
+        <button id="simulateStatsBtn" class="hidden px-5 py-3 rounded-2xl glass-panel hover:bg-slate-700/60 text-slate-300 hover:text-white text-sm font-semibold flex items-center space-x-2 transition border border-slate-700">
+          <i class="fa-solid fa-chart-pie text-cyan-400"></i>
+          <span>Test xác suất (1.000 lần)</span>
+        </button>
+      </div>
+
+    </section>
+
+    <!-- Right: Admin Configuration Panel (Ẩn hoàn toàn với khách) -->
+    <aside id="adminPanel" class="hidden w-full lg:w-[460px] flex-shrink-0 glass-panel rounded-3xl p-5 sm:p-6 shadow-2xl border border-slate-700/60 transition-all duration-300">
+      
+      <!-- Panel Header -->
+      <div class="flex items-center justify-between pb-4 border-b border-slate-700/80 mb-5">
+        <div>
+          <h2 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-sliders text-amber-400"></i>
+            Bảng Cài Đặt Trọng Số
+          </h2>
+          <p class="text-xs text-slate-400">Chỉnh sửa tên phần thưởng và xác suất ngầm</p>
+        </div>
+
+        <button id="closeAdminBtn" class="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Action Toolbar -->
+      <div class="flex flex-wrap gap-2 mb-4">
+        <button id="addItemBtn" class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center space-x-1.5 transition">
+          <i class="fa-solid fa-plus"></i>
+          <span>Thêm ô</span>
+        </button>
+        <button id="normalizeBtn" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center space-x-1.5 transition" title="Quy đổi tất cả trọng số về tổng 100%">
+          <i class="fa-solid fa-percent"></i>
+          <span>Chuẩn hóa 100%</span>
+        </button>
+        <button id="resetDefaultsBtn" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center space-x-1.5 transition ml-auto">
+          <i class="fa-solid fa-arrow-rotate-left"></i>
+          <span>Mặc định</span>
+        </button>
+      </div>
+
+      <!-- Item List Table Header -->
+      <div class="grid grid-cols-12 gap-2 text-xs font-bold text-slate-400 px-2 py-1 mb-1 border-b border-slate-800">
+        <span class="col-span-1 text-center">Màu</span>
+        <span class="col-span-5">Tên giải thưởng</span>
+        <span class="col-span-3 text-right">Trọng số</span>
+        <span class="col-span-2 text-right">Tỉ lệ thực</span>
+        <span class="col-span-1 text-center">Xóa</span>
+      </div>
+
+      <!-- Scrollable List of Items -->
+      <div id="itemsContainer" class="space-y-2 max-h-[380px] overflow-y-auto pr-1 custom-scroll">
+        <!-- Rendered dynamically via JS -->
+      </div>
+
+      <!-- Total Summary -->
+      <div class="mt-4 pt-3 border-t border-slate-700/80 flex items-center justify-between text-xs sm:text-sm px-1">
+        <span class="text-slate-400">Tổng trọng số hiện tại:</span>
+        <div class="flex items-center gap-2">
+          <span id="totalWeightDisplay" class="font-bold text-emerald-400 text-base">100</span>
+          <span class="text-slate-500 text-xs">(100% chuẩn)</span>
+        </div>
+      </div>
+
+      <!-- Firebase Configuration & Realtime Sync Status -->
+      <div class="mt-4 p-3 rounded-2xl bg-slate-900/70 border border-slate-800 text-xs space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-slate-300 font-semibold flex items-center gap-1.5">
+            <i class="fa-solid fa-fire text-amber-500"></i> Firebase Realtime Sync
+          </span>
+          <span id="firebaseStatusBadge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+            Chưa kết nối
+          </span>
+        </div>
+        <p class="text-[11px] text-slate-400">
+          Kết nối Firebase để khi bạn đổi tên / chỉnh % trên máy bạn, máy người chơi tự động cập nhật ngay lập tức.
+        </p>
+        <button id="openFirebaseConfigBtn" class="w-full py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 font-medium transition text-center flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-gear"></i> Cấu hình Firebase
+        </button>
+      </div>
+
+      <!-- Admin Passcode Change Option -->
+      <div class="mt-4 p-3 rounded-2xl bg-slate-900/50 border border-slate-800 text-xs text-slate-400 flex items-center justify-between">
+        <div>
+          <span class="text-slate-300 font-medium">Mã PIN:</span>
+          <span id="currentPinCode" class="ml-1 font-mono text-amber-300 font-bold">8888</span>
+        </div>
+        <button id="changePinBtn" class="text-indigo-400 hover:underline">Đổi mã</button>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Firebase Config Modal -->
+  <div id="firebaseConfigModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md opacity-0 pointer-events-none transition-opacity duration-300">
+    <div class="w-full max-w-md rounded-2xl p-5 bg-slate-900 border border-slate-800 shadow-2xl relative text-left">
+      <button id="closeFirebaseModalBtn" class="absolute top-3.5 right-3.5 text-slate-500 hover:text-slate-300 transition">
+        <i class="fa-solid fa-xmark text-base"></i>
+      </button>
+
+      <h3 class="text-base font-bold text-white mb-2 flex items-center gap-2">
+        <i class="fa-solid fa-fire text-amber-400"></i> Cấu hình Firebase Realtime
+      </h3>
+      <p class="text-xs text-slate-400 mb-4">
+        Dán Database URL hoặc toàn bộ cấu hình JSON từ Firebase Console của bạn vào đây:
+      </p>
+
+      <div class="space-y-3">
+        <div>
+          <label class="text-[11px] text-slate-300 font-semibold block mb-1">Database URL:</label>
+          <input type="text" id="firebaseDbUrlInput" placeholder="https://your-project-default-rtdb.firebaseio.com" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-amber-400 transition">
+        </div>
+
+        <div>
+          <label class="text-[11px] text-slate-300 font-semibold block mb-1">JSON Config (Tùy chọn):</label>
+          <textarea id="firebaseJsonConfigInput" rows="4" placeholder='{ "apiKey": "...", "databaseURL": "..." }' class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-amber-400 transition resize-none"></textarea>
+        </div>
+
+        <div class="flex gap-2 pt-2">
+          <button id="saveFirebaseBtn" class="flex-1 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition">
+            Lưu & Kết nối
+          </button>
+          <button id="clearFirebaseBtn" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-rose-950 text-rose-400 text-xs transition">
+            Xóa kết nối
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Login Modal: Kín đáo không gợi ý -->
+  <div id="loginModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md opacity-0 pointer-events-none transition-opacity duration-300">
+    <div class="w-full max-w-xs rounded-2xl p-6 bg-slate-900 border border-slate-800 shadow-2xl relative text-center">
+      <button id="closeLoginModalBtn" class="absolute top-3.5 right-3.5 text-slate-500 hover:text-slate-300 transition">
+        <i class="fa-solid fa-xmark text-base"></i>
+      </button>
+
+      <div class="w-10 h-10 mx-auto rounded-full bg-slate-800 flex items-center justify-center text-slate-300 text-sm mb-3 border border-slate-700">
+        <i class="fa-solid fa-lock"></i>
+      </div>
+
+      <h3 class="text-xs font-semibold text-slate-300 mb-3 tracking-wide">
+        Xác nhận thêm các ô quay mới
+      </h3>
+
+      <div class="space-y-3">
+        <input type="password" id="adminPinInput" maxlength="16" placeholder="••••" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-white font-mono tracking-widest text-center text-xl focus:outline-none focus:border-slate-500 transition">
+
+        <button id="submitLoginBtn" class="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-700 transition">
+          Xác nhận thêm các ô quay mới
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Change PIN Modal -->
+  <div id="changePinModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md opacity-0 pointer-events-none transition-opacity duration-300">
+    <div class="w-full max-w-xs rounded-2xl p-6 bg-slate-900 border border-slate-800 shadow-2xl relative text-center">
+      <button id="closeChangePinModalBtn" class="absolute top-3.5 right-3.5 text-slate-500 hover:text-slate-300 transition">
+        <i class="fa-solid fa-xmark text-base"></i>
+      </button>
+
+      <h3 class="text-sm font-bold text-white mb-3">Đổi mã PIN mới</h3>
+
+      <div class="space-y-3">
+        <input type="password" id="newPinInput" maxlength="16" placeholder="Tối thiểu 4 ký tự" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono tracking-wider text-center text-sm focus:outline-none focus:border-indigo-500 transition">
+
+        <button id="submitNewPinBtn" class="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition">
+          Lưu mã PIN mới
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Winner Modal -->
+  <div id="winnerModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300">
+    <div class="w-full max-w-sm rounded-3xl p-6 sm:p-8 text-center bg-slate-900 border-2 border-amber-400/50 shadow-2xl shadow-amber-500/20 transform scale-90 transition-transform duration-300" id="modalCard">
+      <div class="w-20 h-20 mx-auto -mt-12 rounded-full bg-gradient-to-tr from-amber-400 to-rose-500 flex items-center justify-center text-3xl text-white shadow-xl shadow-rose-500/40 border-4 border-slate-900 animate-bounce">
+        <i class="fa-solid fa-gift"></i>
+      </div>
+      <p class="text-xs font-bold text-amber-400 tracking-widest uppercase mt-4">KẾT QUẢ QUAY THƯỞNG</p>
+      <h3 id="winnerItemName" class="text-2xl sm:text-3xl font-black text-white mt-2 mb-2 break-words">
+        Chúc mừng!
+      </h3>
+      <p id="winnerItemDetails" class="text-xs text-slate-400 mb-6">
+        Chúc bạn may mắn với phần quà này!
+      </p>
+
+      <button id="closeModalBtn" class="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-rose-500 text-white font-bold text-base shadow-lg shadow-rose-500/30 hover:opacity-95 transition">
+        Xác nhận / Tiếp tục
+      </button>
+    </div>
+  </div>
+
+  <!-- Simulation Results Modal -->
+  <div id="simModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300">
+    <div class="w-full max-w-md rounded-3xl p-6 bg-slate-900 border border-slate-700 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-chart-column text-cyan-400"></i>
+          Kết quả kiểm thử (1.000 lần quay)
+        </h3>
+        <button id="closeSimModalBtn" class="text-slate-400 hover:text-white">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-400 my-3">
+        Mô phỏng máy tính tự quay 1.000 lượt để bạn kiểm tra xem tỉ lệ thực tế có khớp với cài đặt hay không:
+      </p>
+
+      <div id="simList" class="space-y-2 max-h-[300px] overflow-y-auto pr-1 custom-scroll text-xs"></div>
+
+      <button id="okSimModalBtn" class="w-full mt-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-sm transition">
+        Đã hiểu
+      </button>
+    </div>
+  </div>
+
+  <!-- Toast Notification Message Box -->
+  <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl bg-slate-800/95 border border-slate-700 text-slate-200 text-xs sm:text-sm font-medium shadow-2xl pointer-events-none opacity-0 transition-opacity duration-300 flex items-center gap-2">
+    <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400"></i>
+    <span id="toastMsg">Thông báo</span>
+  </div>
+
+  <script>
+    let currentRole = 'GUEST'; // 'GUEST' hoặc 'ADMIN'
+    let adminPin = localStorage.getItem('wheel_admin_pin') || '8888';
+
+    const PALETTE = [
+      '#EF4444', '#F97316', '#F59E0B', '#10B981', 
+      '#06B6D4', '#3B82F6', '#6366F1', '#8B5CF6', 
+      '#EC4899', '#14B8A6'
+    ];
+
+    let items = [
+      { id: 1, text: "iPhone 15 Pro", weight: 2, color: "#EF4444" },
+      { id: 2, text: "Thẻ cào 200k",  weight: 8, color: "#F59E0B" },
+      { id: 3, text: "Thẻ cào 50k",   weight: 15, color: "#10B981" },
+      { id: 4, text: "Áo thun lưu niệm", weight: 15, color: "#06B6D4" },
+      { id: 5, text: "Bình giữ nhiệt", weight: 15, color: "#3B82F6" },
+      { id: 6, text: "Móc chìa khóa", weight: 20, color: "#8B5CF6" },
+      { id: 7, text: "Chúc may mắn!", weight: 25, color: "#64748B" }
+    ];
+
+    const savedItems = localStorage.getItem('wheel_custom_items');
+    if (savedItems) {
+      try {
+        items = JSON.parse(savedItems);
+      } catch(e) {}
+    }
+
+    let firebaseDb = null;
+    let isRemoteUpdate = false;
+
+    function initFirebaseSync() {
+      const savedConfig = localStorage.getItem('wheel_firebase_config');
+      const badge = document.getElementById('firebaseStatusBadge');
+      if (!savedConfig) {
+        if (badge) {
+          badge.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-slate-700 text-slate-400";
+          badge.innerText = "Chưa kết nối";
+        }
+        return;
+      }
+
+      try {
+        const config = JSON.parse(savedConfig);
+        if (!firebase.apps.length) {
+          firebase.initializeApp(config);
+        }
+        firebaseDb = firebase.database();
+        
+        if (badge) {
+          badge.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+          badge.innerText = "Đang kết nối Realtime";
+        }
+
+        // Lắng nghe thay đổi thời gian thực từ cơ sở dữ liệu
+        const itemsRef = firebaseDb.ref('wheel_data/items');
+        itemsRef.on('value', (snapshot) => {
+          const remoteData = snapshot.val();
+          if (remoteData && Array.isArray(remoteData) && remoteData.length >= 2) {
+            isRemoteUpdate = true;
+            items = remoteData;
+            localStorage.setItem('wheel_custom_items', JSON.stringify(items));
+            drawWheel();
+            if (currentRole === 'ADMIN') {
+              renderAdminList();
+            }
+            isRemoteUpdate = false;
+          }
+        });
+
+      } catch (err) {
+        if (badge) {
+          badge.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30";
+          badge.innerText = "Lỗi kết nối";
+        }
+      }
+    }
+
+    function saveItemsToStorage() {
+      localStorage.setItem('wheel_custom_items', JSON.stringify(items));
+      
+      // Đồng bộ trực tiếp lên Firebase Realtime Database nếu đã cấu hình
+      if (firebaseDb && !isRemoteUpdate && currentRole === 'ADMIN') {
+        firebaseDb.ref('wheel_data/items').set(items).catch(() => {});
+      }
+    }
+
+    function updateRoleUI() {
+      const loginBtn = document.getElementById('adminLoginBtn');
+      const adminGroup = document.getElementById('adminControlsGroup');
+      const adminPanel = document.getElementById('adminPanel');
+      const simBtn = document.getElementById('simulateStatsBtn');
+      const currentPinDisplay = document.getElementById('currentPinCode');
+
+      if (currentPinDisplay) {
+        currentPinDisplay.innerText = adminPin;
+      }
+
+      if (currentRole === 'ADMIN') {
+        loginBtn.classList.add('hidden');
+        adminGroup.classList.remove('hidden');
+        adminPanel.classList.remove('hidden');
+        simBtn.classList.remove('hidden');
+        isAdminPanelOpen = true;
+        document.getElementById('adminToggleText').innerText = "Ẩn bảng";
+      } else {
+        loginBtn.classList.remove('hidden');
+        adminGroup.classList.add('hidden');
+        adminPanel.classList.add('hidden');
+        simBtn.classList.add('hidden');
+        isAdminPanelOpen = false;
+      }
+    }
+
+    function checkSecretUrlRole() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const adminParam = urlParams.get('admin');
+      const roleParam = urlParams.get('role');
+
+      if (adminParam === adminPin || roleParam === 'admin' || sessionStorage.getItem('wheel_is_admin') === 'true') {
+        currentRole = 'ADMIN';
+      } else {
+        currentRole = 'GUEST';
+      }
+      updateRoleUI();
+    }
+
+    function loginAsAdmin(pin) {
+      if (pin === adminPin) {
+        currentRole = 'ADMIN';
+        sessionStorage.setItem('wheel_is_admin', 'true');
+        updateRoleUI();
+        closeLoginModal();
+        showToast("Đã cấp quyền Quản trị viên (ADMIN)!");
+        return true;
+      } else {
+        showToast("Mã PIN không chính xác!", "warning");
+        return false;
+      }
+    }
+
+    function logoutAdmin() {
+      currentRole = 'GUEST';
+      sessionStorage.removeItem('wheel_is_admin');
+      updateRoleUI();
+      showToast("Đã chuyển về giao diện Khách");
+    }
+
+    function openLoginModal() {
+      const modal = document.getElementById('loginModal');
+      const input = document.getElementById('adminPinInput');
+      input.value = '';
+      modal.classList.remove('opacity-0', 'pointer-events-none');
+      setTimeout(() => input.focus(), 100);
+    }
+
+    function closeLoginModal() {
+      const modal = document.getElementById('loginModal');
+      modal.classList.add('opacity-0', 'pointer-events-none');
+    }
+
+    let soundEnabled = true;
+    let audioCtx = null;
+
+    function initAudio() {
+      if (!audioCtx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) {
+          audioCtx = new AudioContext();
+        }
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function playTickSound() {
+      if (!soundEnabled || !audioCtx) return;
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(120, audioCtx.currentTime + 0.04);
+        gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.04);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.04);
+      } catch (e) {}
+    }
+
+    function playWinSound() {
+      if (!soundEnabled || !audioCtx) return;
+      try {
+        const notes = [440, 554.37, 659.25, 880];
+        notes.forEach((freq, idx) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, audioCtx.currentTime + idx * 0.1);
+          gain.gain.setValueAtTime(0.15, audioCtx.currentTime + idx * 0.1);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + idx * 0.1 + 0.35);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(audioCtx.currentTime + idx * 0.1);
+          osc.stop(audioCtx.currentTime + idx * 0.1 + 0.35);
+        });
+      } catch (e) {}
+    }
+
+    const canvas = document.getElementById('wheelCanvas');
+    const ctx = canvas.getContext('2d');
+    let currentAngle = 0;
+    let isSpinning = false;
+    let lastTickIndex = -1;
+
+    function drawWheel() {
+      const numItems = items.length;
+      const width = canvas.width;
+      const height = canvas.height;
+      const center = width / 2;
+      const radius = center - 24;
+
+      ctx.clearRect(0, 0, width, height);
+
+      if (numItems === 0) {
+        ctx.fillStyle = "#334155";
+        ctx.beginPath();
+        ctx.arc(center, center, radius, 0, Math.PI * 2);
+        ctx.fill();
+        return;
+      }
+
+      // Các ô hiển thị diện tích bằng nhau 100%
+      const sliceAngle = (Math.PI * 2) / numItems;
+
+      ctx.save();
+      ctx.translate(center, center);
+      ctx.rotate(currentAngle);
+
+      for (let i = 0; i < numItems; i++) {
+        const item = items[i];
+        const start = i * sliceAngle;
+        const end = start + sliceAngle;
+
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, radius, start, end);
+        ctx.closePath();
+        ctx.fillStyle = item.color || PALETTE[i % PALETTE.length];
+        ctx.fill();
+
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        const dotAngle = start + sliceAngle / 2;
+        const dotX = Math.cos(dotAngle) * (radius - 12);
+        const dotY = Math.sin(dotAngle) * (radius - 12);
+        ctx.beginPath();
+        ctx.arc(dotX, dotY, 4, 0, Math.PI * 2);
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fill();
+
+        ctx.save();
+        ctx.rotate(start + sliceAngle / 2);
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#FFFFFF";
+        ctx.font = "bold 24px 'Be Vietnam Pro', sans-serif";
+        ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+        ctx.shadowBlur = 6;
+        ctx.shadowOffsetX = 1;
+        ctx.shadowOffsetY = 1;
+
+        let displayTitle = item.text;
+        if (displayTitle.length > 16) {
+          displayTitle = displayTitle.substring(0, 14) + '...';
+        }
+        ctx.fillText(displayTitle, radius - 32, 8);
+        ctx.restore();
+      }
+
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.strokeStyle = '#FBBF24';
+      ctx.lineWidth = 10;
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function pickWeightedIndex() {
+      const totalWeight = items.reduce((sum, item) => sum + Math.max(0, parseFloat(item.weight) || 0), 0);
+      if (totalWeight <= 0) {
+        return Math.floor(Math.random() * items.length);
+      }
+
+      let randomThreshold = Math.random() * totalWeight;
+      for (let i = 0; i < items.length; i++) {
+        const w = Math.max(0, parseFloat(items[i].weight) || 0);
+        if (randomThreshold <= w) {
+          return i;
+        }
+        randomThreshold -= w;
+      }
+      return items.length - 1;
+    }
+
+    function calculateTargetAngle(targetIndex) {
+      const n = items.length;
+      const sliceAngle = (Math.PI * 2) / n;
+      const pointerAngle = (3 * Math.PI) / 2; // Vị trí kim ở đỉnh 12 giờ
+
+      const randomOffsetInSlice = (Math.random() - 0.5) * 0.6 * sliceAngle;
+      const targetSliceCenter = (targetIndex + 0.5) * sliceAngle + randomOffsetInSlice;
+      let desiredNormalizedAngle = (pointerAngle - targetSliceCenter) % (Math.PI * 2);
+      if (desiredNormalizedAngle < 0) desiredNormalizedAngle += Math.PI * 2;
+
+      const currentNorm = currentAngle % (Math.PI * 2);
+      let delta = desiredNormalizedAngle - currentNorm;
+      if (delta < 0) delta += Math.PI * 2;
+
+      const fullSpins = (6 + Math.floor(Math.random() * 3)) * (Math.PI * 2);
+      return currentAngle + fullSpins + delta;
+    }
+
+    function startSpin() {
+      if (isSpinning || items.length === 0) return;
+      initAudio();
+
+      isSpinning = true;
+      document.getElementById('spinBtn').disabled = true;
+      document.getElementById('centerSpinBtn').disabled = true;
+      document.getElementById('spinBtn').classList.add('opacity-50', 'cursor-not-allowed');
+
+      const targetIndex = pickWeightedIndex();
+      const targetItem = items[targetIndex];
+
+      const startAngle = currentAngle;
+      const targetAngle = calculateTargetAngle(targetIndex);
+      const spinDuration = 5200;
+      const startTime = performance.now();
+      const numItems = items.length;
+      const sliceAngle = (Math.PI * 2) / numItems;
+
+      function easeOutCubic(t) {
+        return 1 - Math.pow(1 - t, 3);
+      }
+
+      function animateSpin(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / spinDuration, 1);
+        const easedProgress = easeOutCubic(progress);
+
+        currentAngle = startAngle + (targetAngle - startAngle) * easedProgress;
+
+        const normalizedPointerAngle = ((3 * Math.PI) / 2 - currentAngle) % (Math.PI * 2);
+        const positiveAngle = normalizedPointerAngle < 0 ? normalizedPointerAngle + Math.PI * 2 : normalizedPointerAngle;
+        const currentSlice = Math.floor(positiveAngle / sliceAngle) % numItems;
+
+        if (currentSlice !== lastTickIndex) {
+          playTickSound();
+          const pointer = document.getElementById('pointerPin');
+          pointer.style.transform = 'translateX(-50%) rotate(-12deg)';
+          setTimeout(() => {
+            pointer.style.transform = 'translateX(-50%) rotate(0deg)';
+          }, 60);
+          lastTickIndex = currentSlice;
+        }
+
+        drawWheel();
+
+        if (progress < 1) {
+          requestAnimationFrame(animateSpin);
+        } else {
+          isSpinning = false;
+          document.getElementById('spinBtn').disabled = false;
+          document.getElementById('centerSpinBtn').disabled = false;
+          document.getElementById('spinBtn').classList.remove('opacity-50', 'cursor-not-allowed');
+
+          playWinSound();
+          triggerConfetti();
+          showWinnerModal(targetItem);
+        }
+      }
+
+      requestAnimationFrame(animateSpin);
+    }
+
+    function triggerConfetti() {
+      if (typeof confetti === 'function') {
+        try {
+          confetti({
+            particleCount: 80,
+            spread: 70,
+            origin: { y: 0.6 }
+          });
+          setTimeout(() => {
+            confetti({ particleCount: 50, angle: 60, spread: 55, origin: { x: 0 } });
+            confetti({ particleCount: 50, angle: 120, spread: 55, origin: { x: 1 } });
+          }, 200);
+        } catch (e) {}
+      }
+    }
+
+    function showWinnerModal(item) {
+      const modal = document.getElementById('winnerModal');
+      const card = document.getElementById('modalCard');
+      const nameElem = document.getElementById('winnerItemName');
+      const detailsElem = document.getElementById('winnerItemDetails');
+
+      nameElem.innerText = item.text;
+      
+      if (currentRole === 'ADMIN') {
+        const totalWeight = items.reduce((s, it) => s + (parseFloat(it.weight) || 0), 0);
+        const pct = totalWeight > 0 ? ((item.weight / totalWeight) * 100).toFixed(1) : 0;
+        detailsElem.innerText = `[ADMIN VIEW] Xác suất trúng đã cài: ${pct}% (Trọng số: ${item.weight})`;
+        detailsElem.classList.remove('hidden');
+      } else {
+        detailsElem.innerText = "Chúc bạn may mắn với phần quà này!";
+      }
+
+      modal.classList.remove('opacity-0', 'pointer-events-none');
+      card.classList.remove('scale-90');
+      card.classList.add('scale-100');
+    }
+
+    function hideWinnerModal() {
+      const modal = document.getElementById('winnerModal');
+      const card = document.getElementById('modalCard');
+      modal.classList.add('opacity-0', 'pointer-events-none');
+      card.classList.remove('scale-100');
+      card.classList.add('scale-90');
+    }
+
+    function renderAdminList() {
+      const container = document.getElementById('itemsContainer');
+      container.innerHTML = '';
+
+      const totalWeight = items.reduce((sum, item) => sum + Math.max(0, parseFloat(item.weight) || 0), 0);
+      document.getElementById('totalWeightDisplay').innerText = totalWeight.toFixed(1).replace('.0', '');
+
+      items.forEach((item, index) => {
+        const itemPct = totalWeight > 0 ? ((Math.max(0, item.weight) / totalWeight) * 100).toFixed(1) : '0';
+
+        const row = document.createElement('div');
+        row.className = "grid grid-cols-12 gap-2 items-center bg-slate-800/60 p-2 rounded-xl border border-slate-700/50 hover:border-slate-600 transition";
+
+        row.innerHTML = `
+          <div class="col-span-1 flex justify-center">
+            <input type="color" value="${item.color}" data-idx="${index}" class="color-input w-6 h-6 rounded border-0 bg-transparent cursor-pointer">
+          </div>
+          <div class="col-span-5">
+            <input type="text" value="${item.text}" data-idx="${index}" class="name-input w-full bg-slate-900/80 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-indigo-400">
+          </div>
+          <div class="col-span-3">
+            <input type="number" min="0" step="any" value="${item.weight}" data-idx="${index}" class="weight-input w-full bg-slate-900/80 border border-slate-700 rounded-lg px-2 py-1 text-xs text-right font-mono text-amber-300 focus:outline-none focus:border-amber-400">
+          </div>
+          <div class="col-span-2 text-right text-xs font-semibold ${parseFloat(itemPct) > 20 ? 'text-emerald-400' : 'text-slate-400'}">
+            ${itemPct}%
+          </div>
+          <div class="col-span-1 flex justify-center">
+            <button data-idx="${index}" class="del-btn text-slate-500 hover:text-red-400 p-1 text-xs transition">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+          </div>
+        `;
+
+        container.appendChild(row);
+      });
+
+      // Lắng nghe sự kiện người dùng nhập tên quà
+      container.querySelectorAll('.name-input').forEach(input => {
+        input.addEventListener('input', (e) => {
+          const idx = parseInt(e.target.dataset.idx);
+          items[idx].text = e.target.value;
+          saveItemsToStorage();
+          drawWheel();
+        });
+      });
+
+      // Lắng nghe chọn màu
+      container.querySelectorAll('.color-input').forEach(input => {
+        input.addEventListener('input', (e) => {
+          const idx = parseInt(e.target.dataset.idx);
+          items[idx].color = e.target.value;
+          saveItemsToStorage();
+          drawWheel();
+        });
+      });
+
+      // Lắng nghe chỉnh trọng số xác suất
+      container.querySelectorAll('.weight-input').forEach(input => {
+        input.addEventListener('input', (e) => {
+          const idx = parseInt(e.target.dataset.idx);
+          const val = parseFloat(e.target.value);
+          items[idx].weight = isNaN(val) || val < 0 ? 0 : val;
+          saveItemsToStorage();
+          renderAdminList();
+        });
+      });
+
+      // Xóa ô
+      container.querySelectorAll('.del-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.dataset.idx);
+          if (items.length <= 2) {
+            showToast("Vòng quay cần tối thiểu 2 ô!", "warning");
+            return;
+          }
+          items.splice(idx, 1);
+          saveItemsToStorage();
+          renderAdminList();
+          drawWheel();
+          showToast("Đã xóa ô giải thưởng");
+        });
+      });
+    }
+
+    function normalizeWeights() {
+      const totalWeight = items.reduce((sum, item) => sum + Math.max(0, parseFloat(item.weight) || 0), 0);
+      if (totalWeight <= 0) {
+        const even = (100 / items.length).toFixed(1);
+        items.forEach(it => it.weight = parseFloat(even));
+      } else {
+        items.forEach(it => {
+          const normalized = (it.weight / totalWeight) * 100;
+          it.weight = parseFloat(normalized.toFixed(1));
+        });
+      }
+      saveItemsToStorage();
+      renderAdminList();
+      showToast("Đã chuẩn hóa tất cả về 100%");
+    }
+
+    function addNewItem() {
+      const newId = Date.now();
+      const color = PALETTE[items.length % PALETTE.length];
+      items.push({
+        id: newId,
+        text: `Phần quà ${items.length + 1}`,
+        weight: 10,
+        color: color
+      });
+      saveItemsToStorage();
+      renderAdminList();
+      drawWheel();
+      showToast("Đã thêm 1 ô mới");
+    }
+
+    function resetDefaults() {
+      items = [
+        { id: 1, text: "iPhone 15 Pro", weight: 2, color: "#EF4444" },
+        { id: 2, text: "Thẻ cào 200k",  weight: 8, color: "#F59E0B" },
+        { id: 3, text: "Thẻ cào 50k",   weight: 15, color: "#10B981" },
+        { id: 4, text: "Áo thun lưu niệm", weight: 15, color: "#06B6D4" },
+        { id: 5, text: "Bình giữ nhiệt", weight: 15, color: "#3B82F6" },
+        { id: 6, text: "Móc chìa khóa", weight: 20, color: "#8B5CF6" },
+        { id: 7, text: "Chúc may mắn!", weight: 25, color: "#64748B" }
+      ];
+      saveItemsToStorage();
+      renderAdminList();
+      drawWheel();
+      showToast("Đã khôi phục cài đặt mặc định");
+    }
+
+    let isAdminPanelOpen = false;
+    function toggleAdminPanel() {
+      if (currentRole !== 'ADMIN') {
+        openLoginModal();
+        return;
+      }
+      const panel = document.getElementById('adminPanel');
+      const toggleText = document.getElementById('adminToggleText');
+      isAdminPanelOpen = !isAdminPanelOpen;
+
+      if (isAdminPanelOpen) {
+        panel.classList.remove('hidden');
+        toggleText.innerText = "Ẩn bảng";
+      } else {
+        panel.classList.add('hidden');
+        toggleText.innerText = "Hiện bảng";
+      }
+    }
+
+    let toastTimeout = null;
+    function showToast(message, type = "success") {
+      const toast = document.getElementById('toast');
+      const msg = document.getElementById('toastMsg');
+      const icon = document.getElementById('toastIcon');
+
+      msg.innerText = message;
+      if (type === "warning") {
+        icon.className = "fa-solid fa-triangle-exclamation text-amber-400";
+      } else {
+        icon.className = "fa-solid fa-circle-check text-emerald-400";
+      }
+
+      toast.classList.remove('opacity-0');
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.add('opacity-0');
+      }, 2500);
+    }
+
+    function runSimulation() {
+      const simResults = {};
+      items.forEach(it => simResults[it.text] = 0);
+
+      const totalSims = 1000;
+      for (let i = 0; i < totalSims; i++) {
+        const pickedIdx = pickWeightedIndex();
+        simResults[items[pickedIdx].text]++;
+      }
+
+      const simList = document.getElementById('simList');
+      simList.innerHTML = '';
+
+      const totalWeight = items.reduce((s, it) => s + (parseFloat(it.weight) || 0), 0);
+
+      items.forEach(it => {
+        const count = simResults[it.text] || 0;
+        const actualPct = ((count / totalSims) * 100).toFixed(1);
+        const configuredPct = totalWeight > 0 ? ((it.weight / totalWeight) * 100).toFixed(1) : '0';
+
+        const itemRow = document.createElement('div');
+        itemRow.className = "p-2 rounded-xl bg-slate-800/70 border border-slate-700/60";
+        itemRow.innerHTML = `
+          <div class="flex justify-between items-center mb-1">
+            <span class="font-semibold text-white">${it.text}</span>
+            <span class="text-slate-300">${count} lần (${actualPct}%)</span>
+          </div>
+          <div class="w-full bg-slate-700 rounded-full h-1.5 overflow-hidden">
+            <div class="bg-indigo-400 h-1.5 rounded-full" style="width: ${actualPct}%"></div>
+          </div>
+          <div class="text-[10px] text-slate-400 mt-1">Cài đặt mục tiêu: ${configuredPct}%</div>
+        `;
+        simList.appendChild(itemRow);
+      });
+
+      const simModal = document.getElementById('simModal');
+      simModal.classList.remove('opacity-0', 'pointer-events-none');
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      drawWheel();
+      renderAdminList();
+      checkSecretUrlRole();
+
+      document.getElementById('spinBtn').addEventListener('click', startSpin);
+      document.getElementById('centerSpinBtn').addEventListener('click', startSpin);
+
+      document.getElementById('adminLoginBtn').addEventListener('click', openLoginModal);
+      document.getElementById('closeLoginModalBtn').addEventListener('click', closeLoginModal);
+      document.getElementById('logoutAdminBtn').addEventListener('click', logoutAdmin);
+
+      document.getElementById('submitLoginBtn').addEventListener('click', () => {
+        const val = document.getElementById('adminPinInput').value.trim();
+        loginAsAdmin(val);
+      });
+
+      document.getElementById('adminPinInput').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          loginAsAdmin(e.target.value.trim());
+        }
+      });
+
+      const changePinModal = document.getElementById('changePinModal');
+      const newPinInput = document.getElementById('newPinInput');
+
+      document.getElementById('changePinBtn').addEventListener('click', () => {
+        newPinInput.value = '';
+        changePinModal.classList.remove('opacity-0', 'pointer-events-none');
+        setTimeout(() => newPinInput.focus(), 100);
+      });
+
+      document.getElementById('closeChangePinModalBtn').addEventListener('click', () => {
+        changePinModal.classList.add('opacity-0', 'pointer-events-none');
+      });
+
+      document.getElementById('submitNewPinBtn').addEventListener('click', () => {
+        const val = newPinInput.value.trim();
+        if (val.length >= 4) {
+          adminPin = val;
+          localStorage.setItem('wheel_admin_pin', adminPin);
+          document.getElementById('currentPinCode').innerText = adminPin;
+          changePinModal.classList.add('opacity-0', 'pointer-events-none');
+          showToast("Đã đổi mã PIN thành công!");
+        } else {
+          showToast("Mã phải từ 4 ký tự trở lên!", "warning");
+        }
+      });
+
+      newPinInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          document.getElementById('submitNewPinBtn').click();
+        }
+      });
+
+      document.getElementById('toggleAdminBtn').addEventListener('click', toggleAdminPanel);
+      document.getElementById('closeAdminBtn').addEventListener('click', toggleAdminPanel);
+      document.getElementById('addItemBtn').addEventListener('click', addNewItem);
+      document.getElementById('normalizeBtn').addEventListener('click', normalizeWeights);
+      document.getElementById('resetDefaultsBtn').addEventListener('click', resetDefaults);
+
+      document.getElementById('toggleSoundBtn').addEventListener('click', () => {
+        soundEnabled = !soundEnabled;
+        const icon = document.getElementById('soundIcon');
+        if (soundEnabled) {
+          icon.className = 'fa-solid fa-volume-high';
+          showToast("Âm thanh: ĐÃ BẬT");
+        } else {
+          icon.className = 'fa-solid fa-volume-xmark';
+          showToast("Âm thanh: ĐÃ TẮT");
+        }
+      });
+
+      document.getElementById('simulateStatsBtn').addEventListener('click', runSimulation);
+      document.getElementById('closeSimModalBtn').addEventListener('click', () => {
+        document.getElementById('simModal').classList.add('opacity-0', 'pointer-events-none');
+      });
+      document.getElementById('okSimModalBtn').addEventListener('click', () => {
+        document.getElementById('simModal').classList.add('opacity-0', 'pointer-events-none');
+      });
+
+      document.getElementById('closeModalBtn').addEventListener('click', hideWinnerModal);
+
+      window.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT') return;
+
+        if (e.key === 'a' || e.key === 'A') {
+          if (currentRole === 'ADMIN') {
+            toggleAdminPanel();
+          } else {
+            openLoginModal();
+          }
+        }
+        if (e.code === 'Space' && !isSpinning) {
+          e.preventDefault();
+          startSpin();
+        }
+      });
+
+      window.addEventListener('resize', () => {
+        drawWheel();
+      });
+
+      // Cấu hình Firebase Realtime
+      const firebaseModal = document.getElementById('firebaseConfigModal');
+      const openFirebaseModalBtn = document.getElementById('openFirebaseConfigBtn');
+      const closeFirebaseModalBtn = document.getElementById('closeFirebaseModalBtn');
+      const saveFirebaseBtn = document.getElementById('saveFirebaseBtn');
+      const clearFirebaseBtn = document.getElementById('clearFirebaseBtn');
+      const dbUrlInput = document.getElementById('firebaseDbUrlInput');
+      const jsonConfigInput = document.getElementById('firebaseJsonConfigInput');
+
+      if (openFirebaseModalBtn) {
+        openFirebaseModalBtn.addEventListener('click', () => {
+          const currentConfig = localStorage.getItem('wheel_firebase_config');
+          if (currentConfig) {
+            try {
+              const cfg = JSON.parse(currentConfig);
+              dbUrlInput.value = cfg.databaseURL || '';
+              jsonConfigInput.value = currentConfig;
+            } catch(e) {}
+          }
+          firebaseModal.classList.remove('opacity-0', 'pointer-events-none');
+        });
+      }
+
+      if (closeFirebaseModalBtn) {
+        closeFirebaseModalBtn.addEventListener('click', () => {
+          firebaseModal.classList.add('opacity-0', 'pointer-events-none');
+        });
+      }
+
+      if (saveFirebaseBtn) {
+        saveFirebaseBtn.addEventListener('click', () => {
+          let config = null;
+          const jsonText = jsonConfigInput.value.trim();
+          const dbUrl = dbUrlInput.value.trim();
+
+          if (jsonText) {
+            try {
+              config = JSON.parse(jsonText);
+            } catch(e) {
+              showToast("JSON Config không đúng định dạng!", "warning");
+              return;
+            }
+          } else if (dbUrl) {
+            config = { databaseURL: dbUrl };
+          }
+
+          if (config) {
+            localStorage.setItem('wheel_firebase_config', JSON.stringify(config));
+            firebaseModal.classList.add('opacity-0', 'pointer-events-none');
+            showToast("Đã lưu cấu hình Firebase!");
+            initFirebaseSync();
+            saveItemsToStorage();
+          } else {
+            showToast("Vui lòng nhập Database URL hoặc JSON Config!", "warning");
+          }
+        });
+      }
+
+      if (clearFirebaseBtn) {
+        clearFirebaseBtn.addEventListener('click', () => {
+          localStorage.removeItem('wheel_firebase_config');
+          firebaseDb = null;
+          dbUrlInput.value = '';
+          jsonConfigInput.value = '';
+          firebaseModal.classList.add('opacity-0', 'pointer-events-none');
+          const badge = document.getElementById('firebaseStatusBadge');
+          if (badge) {
+            badge.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-slate-700 text-slate-400";
+            badge.innerText = "Chưa kết nối";
+          }
+          showToast("Đã xóa cấu hình Firebase");
+        });
+      }
+
+      initFirebaseSync();
+    });
+  </script>
+</body>
+</html>
